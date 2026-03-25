@@ -238,43 +238,6 @@ while True:
 # =====================
 # ПОСАДКА
 # =====================
-# print("Landing...")
-
-# while True:
-#     alt = vehicle.location.global_relative_frame.alt or 0
-#     print(f"Landing Alt: {alt:.2f}")
-
-#     # 🔥 STOP ДО ЗЕМЛІ
-#     if alt <= 0.1:
-#         print("Touchdown detected")
-#         break
-
-#     # 🔥 ПЛАВНИЙ СПУСК (БЕЗ РІЗКОГО ПАДІННЯ) 
-        
-#     if alt > 30:
-#         throttle = 1300
-#     elif alt > 20:
-#         throttle = 1310
-#     elif alt > 10:
-#         throttle = 1330
-#     elif alt > 4:
-#         throttle = 1350
-#     elif alt > 3:
-#         throttle = 1356
-#     elif alt > 2:
-#         throttle = 1357
-#     elif alt > 1:
-#         throttle = 1358
-#     else:
-#         throttle = 1359 
-
-#     set_rc(throttle=throttle)
-
-#     time.sleep(0.3)
-
-# # 🔥 ПІСЛЯ КОНТАКТУ
-# vehicle.channels.overrides = {}
-# print("DONE")
 
 print("Landing with position hold...")
 
@@ -285,7 +248,7 @@ while True:
     print(f"Alt: {alt:.2f}")
 
     # STOP
-    if alt <= 0.1:
+    if alt <= 0.3:
         print("Touchdown detected")
         break
 
@@ -298,16 +261,16 @@ while True:
         throttle = 1310
     elif alt > 10:
         throttle = 1330
-    elif alt > 4:
+    elif alt > 8:
         throttle = 1350
-    elif alt > 3:
-        throttle = 1356
+    elif alt > 6:
+        throttle = 1360
+    elif alt > 4:
+        throttle = 1362
     elif alt > 2:
-        throttle = 1357
-    elif alt > 1:
-        throttle = 1358
+        throttle = 1364
     else:
-        throttle = 1359
+        throttle = 1365
 
     # ---------------------
     # ПОЗИЦІЙНА КОРЕКЦІЯ
@@ -331,7 +294,7 @@ while True:
 
     if dist > 0.5:
         # чим ближче — тим слабша корекція
-        if alt > 5:
+        if alt > 10:
             power = 20
         else:
             power = 10
@@ -358,7 +321,7 @@ while True:
         "4": int(yaw),
     }
 
-    time.sleep(0.25)
+    time.sleep(0.3)
 
 vehicle.channels.overrides = {}
 print("DONE")
