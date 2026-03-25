@@ -238,26 +238,66 @@ while True:
 # =====================
 # ПОСАДКА
 # =====================
-print("Landing...")
+# print("Landing...")
+
+# while True:
+#     alt = vehicle.location.global_relative_frame.alt or 0
+#     print(f"Landing Alt: {alt:.2f}")
+
+#     # 🔥 STOP ДО ЗЕМЛІ
+#     if alt <= 0.1:
+#         print("Touchdown detected")
+#         break
+
+#     # 🔥 ПЛАВНИЙ СПУСК (БЕЗ РІЗКОГО ПАДІННЯ) 
+        
+#     if alt > 30:
+#         throttle = 1300
+#     elif alt > 20:
+#         throttle = 1310
+#     elif alt > 10:
+#         throttle = 1330
+#     elif alt > 4:
+#         throttle = 1350
+#     elif alt > 3:
+#         throttle = 1356
+#     elif alt > 2:
+#         throttle = 1357
+#     elif alt > 1:
+#         throttle = 1358
+#     else:
+#         throttle = 1359 
+
+#     set_rc(throttle=throttle)
+
+#     time.sleep(0.3)
+
+# # 🔥 ПІСЛЯ КОНТАКТУ
+# vehicle.channels.overrides = {}
+# print("DONE")
+
+print("Landing with position hold...")
 
 while True:
+    loc = vehicle.location.global_frame
     alt = vehicle.location.global_relative_frame.alt or 0
-    print(f"Landing Alt: {alt:.2f}")
 
-    # 🔥 STOP ДО ЗЕМЛІ
+    print(f"Alt: {alt:.2f}")
+
+    # STOP
     if alt <= 0.1:
         print("Touchdown detected")
         break
 
-    # 🔥 ПЛАВНИЙ СПУСК (БЕЗ РІЗКОГО ПАДІННЯ)
+    # ---------------------
+    # ВИСОТА
+    # ---------------------
     if alt > 30:
         throttle = 1300
     elif alt > 20:
         throttle = 1310
     elif alt > 10:
         throttle = 1330
-    elif alt > 8:
-        throttle = 1349
     elif alt > 4:
         throttle = 1350
     elif alt > 3:
@@ -266,15 +306,59 @@ while True:
         throttle = 1357
     elif alt > 1:
         throttle = 1358
-    # elif alt > 1:
-    #     throttle = 1352
     else:
-        throttle = 1359   
+        throttle = 1359
 
-    set_rc(throttle=throttle)
+    # ---------------------
+    # ПОЗИЦІЙНА КОРЕКЦІЯ
+    # ---------------------
+    dist = get_distance(loc.lat, loc.lon, TARGET_LAT, TARGET_LON)
 
-    time.sleep(0.3)
+    # напрямок до точки
+    bearing = get_bearing(loc.lat, loc.lon, TARGET_LAT, TARGET_LON)
+    heading = vehicle.heading or 0
 
-# 🔥 ПІСЛЯ КОНТАКТУ
+    diff = normalize_angle(bearing - heading)
+
+    # YAW (дивимось на точку)
+    yaw = clamp(1500 - diff * 3, 1400, 1600)
+
+    # ---------------------
+    # КОРЕКЦІЯ РУХУ
+    # ---------------------
+    pitch = 1500
+    roll = 1500
+
+    if dist > 0.5:
+        # чим ближче — тим слабша корекція
+        if alt > 5:
+            power = 20
+        else:
+            power = 10
+
+        # рух вперед/назад
+        if abs(diff) < 20:
+            pitch = 1500 - power
+        elif abs(diff) > 160:
+            pitch = 1500 + power
+
+        # боковий drift (дуже важливо)
+        if diff > 20:
+            roll = 1500 + power
+        elif diff < -20:
+            roll = 1500 - power
+
+    # ---------------------
+    # APPLY
+    # ---------------------
+    vehicle.channels.overrides = {
+        "1": int(roll),
+        "2": int(pitch),
+        "3": int(throttle),
+        "4": int(yaw),
+    }
+
+    time.sleep(0.25)
+
 vehicle.channels.overrides = {}
 print("DONE")
