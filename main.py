@@ -494,11 +494,11 @@ THROTTLE_MAX = 1555
 # ПАРАМЕТРИ ПОЛЬОТУ
 # =====================
 MAX_SPEED = 10.0             # максимум 10 м/с
-MIN_APPROACH_SPEED = 3.5     # мінімум біля цілі, щоб вітер не "зависив"
+MIN_APPROACH_SPEED = 5     # мінімум біля цілі, щоб вітер не "зависив"
 SLOW_RADIUS = 80.0           # починаємо гальмування за 80 м
 LAND_START_DIST = 3.0        # якщо ближче, починаємо посадку
-WIND_GAIN = 1.6              # компенсація зносу по швидкості
-SPEED_GAIN = 14.0            # наскільки агресивно розганяємось
+WIND_GAIN = 2.5              # компенсація зносу по швидкості
+SPEED_GAIN = 24.0            # наскільки агресивно розганяємось
 FINAL_BRAKE_RADIUS = 12.0    # зона більш точного дотискання
 
 # =====================
@@ -743,8 +743,8 @@ while True:
     pos_corr_e = pid_e.update(error=de, dt=dt, derivative_override=-ve)
 
     # ===== БАЗОВА КОМАНДА РУХУ =====
-    cmd_n = dir_n * speed_error * SPEED_GAIN + pos_corr_n * 0.45
-    cmd_e = dir_e * speed_error * SPEED_GAIN + pos_corr_e * 0.45
+    cmd_n = dir_n * speed_error * SPEED_GAIN + pos_corr_n * 0.7
+    cmd_e = dir_e * speed_error * SPEED_GAIN + pos_corr_e * 0.7
 
     # ===== АНТИ-ВІТЕР / КОМПЕНСАЦІЯ ЗНОСУ =====
     # Якщо вітер або інерція зносять — підсилюємо компенсацію по швидкості.
@@ -757,15 +757,15 @@ while True:
         cmd_e += de * 0.9
 
     # ===== ОБМЕЖЕННЯ =====
-    max_horiz_cmd = 165
+    max_horiz_cmd = 180
     if dist < 40:
-        max_horiz_cmd = 135
+        max_horiz_cmd = 170
     if dist < 15:
-        max_horiz_cmd = 110
+        max_horiz_cmd = 150
     if dist < 8:
-        max_horiz_cmd = 90
+        max_horiz_cmd = 130
     if dist < 4:
-        max_horiz_cmd = 80
+        max_horiz_cmd = 110
 
     cmd_n = clamp(cmd_n, -max_horiz_cmd, max_horiz_cmd)
     cmd_e = clamp(cmd_e, -max_horiz_cmd, max_horiz_cmd)
@@ -856,12 +856,7 @@ while time.time() - stable_start < 2.5:
 # =====================
 print("Landing...")
 
-pid_n.reset()
-pid_e.reset()
-pid_alt.reset()
-
 landing_target_alt = TARGET_ALT
-
 prev_time = time.time()
 prev_alt = vehicle.location.global_relative_frame.alt or 0.0
 
@@ -874,92 +869,75 @@ while True:
 
     loc = vehicle.location.global_frame
     alt = vehicle.location.global_relative_frame.alt or 0.0
-    heading = vehicle.heading or 0.0
 
-    if alt < 0.25:
+    if alt < 0.4:
         break
 
     dn, de, dist = get_distance(loc.lat, loc.lon, TARGET_LAT, TARGET_LON)
 
     vel = vehicle.velocity or [0.0, 0.0, 0.0]
-    vn = vel[0] or 0.0
-    ve = vel[1] or 0.0
-    speed_xy = math.sqrt(vn * vn + ve * ve)
+    vn = vel[0]
+    ve = vel[1]
 
     alt_rate = (alt - prev_alt) / dt
     prev_alt = alt
 
-    # Чим нижче, тим повільніше спускаємось
-    if alt > 100:
+    # ===== ГОРИЗОНТАЛЬ =====
+    if alt > 10:
+        Kp = 6
+        Kv = 4
+    else:
+        Kp = 14   # 🔥 сильніше тримає точку біля землі
+        Kv = 8    # 🔥 гасить вітер
+
+    pitch = 1500 - dn * Kp - vn * Kv
+    roll  = 1500 + de * Kp - ve * Kv
+
+    # 🔥 важливо — розширюємо діапазон
+    pitch = clamp(pitch, 1400, 1600)
+    roll  = clamp(roll, 1400, 1600)
+
+    # ===== ШВИДКІСТЬ СПУСКУ =====
+    if alt > 50:
         landing_rate = 1.8
-    elif alt > 40:
-        landing_rate = 1.4
-    elif alt > 15:
-        landing_rate = 1.0
-    elif alt > 6:
-        landing_rate = 0.65
-    elif alt > 2:
-        landing_rate = 0.40
+    elif alt > 20:
+        landing_rate = 1.2
+    elif alt > 8:
+        landing_rate = 0.8
+    elif alt > 3:
+        landing_rate = 0.5
     else:
-        landing_rate = 0.22
+        landing_rate = 0.3
 
-    landing_target_alt = max(0.0, landing_target_alt - landing_rate * dt)
+    # 🔥 ВАЖЛИВО: НЕ ГАЛЬМУЄМО СПУСК ЯКЩО НЕ НАД ТОЧКОЮ
+    if dist > 2.5:
+        landing_rate *= 0.7   # трохи повільніше, але не 0!
 
-    # Точна горизонтальна корекція з інтегралом і демпфуванням швидкості
-    cmd_n = pid_n.update(error=dn, dt=dt, derivative_override=-vn)
-    cmd_e = pid_e.update(error=de, dt=dt, derivative_override=-ve)
+    # ===== ТРАЄКТОРІЯ ВИСОТИ =====
+    landing_target_alt = max(0, landing_target_alt - landing_rate * dt)
 
-    # Анти-вітер: підсилюємо компенсацію зносу
-    cmd_n += -vn * 1.4
-    cmd_e += -ve * 1.4
-
-    # На малій висоті ще сильніше дотискаємо до точки
-    if alt < 8:
-        cmd_n += dn * 0.8
-        cmd_e += de * 0.8
-
-    # Ближче до землі — менші горизонтальні команди, але не занадто малі
-    if alt > 40:
-        max_horiz_cmd = 55
-    elif alt > 15:
-        max_horiz_cmd = 45
-    elif alt > 5:
-        max_horiz_cmd = 35
-    else:
-        max_horiz_cmd = 24
-
-    cmd_n = clamp(cmd_n, -max_horiz_cmd, max_horiz_cmd)
-    cmd_e = clamp(cmd_e, -max_horiz_cmd, max_horiz_cmd)
-
-    forward_cmd, right_cmd = earth_to_body(cmd_n, cmd_e, heading)
-
-    pitch = RC_NEUTRAL - forward_cmd
-    roll = RC_NEUTRAL + right_cmd
-
-    # PID по висоті під траєкторію зниження
     alt_error = landing_target_alt - alt
-    alt_derivative = (-landing_rate) - alt_rate
 
-    throttle = HOVER_THROTTLE + pid_alt.update(
-        error=alt_error,
-        dt=dt,
-        derivative_override=alt_derivative
-    )
+    # throttle = HOVER_THROTTLE + alt_error * 6 - alt_rate * 3
+    if alt > 4:
+    # нормальна PID логіка
+        throttle = HOVER_THROTTLE + alt_error * 6 - alt_rate * 3
+    else:
+    # 🔥 ЖОРСТКИЙ СПУСК
+        throttle = 1340
 
-    # Додаткові рамки на малій висоті
-    if alt < 2.5:
-        throttle = clamp(throttle, 1328, 1398)
-    elif alt < 8.0:
-        throttle = clamp(throttle, 1320, 1412)
+    # 🔥 ДОЖИМ НА МАЛІЙ ВИСОТІ
+    if alt < 5:
+        throttle -= 10
+    if alt < 2:
+        throttle -= 8
 
+    throttle = clamp(throttle, 1300, 1500)
+
+    # set_rc(roll, pitch, throttle)
     set_rc(roll, pitch, throttle, dt)
 
-    print(
-        f"LAND | alt={alt:6.2f} | tgt_alt={landing_target_alt:6.2f} | "
-        f"dist={dist:5.2f} | v={speed_xy:4.2f} | "
-        f"dn={dn:6.2f} de={de:6.2f} | "
-        f"roll={int(roll)} pitch={int(pitch)} thr={int(throttle)}"
-    )
+    print(f"LAND | alt={alt:.2f} | dist={dist:.2f}")
 
     time.sleep(DT)
 
