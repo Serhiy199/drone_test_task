@@ -460,12 +460,16 @@ print("Connecting...")
 vehicle = connect("127.0.0.1:14550", wait_ready=True)
 
 # =====================
-# ВІТЕР
-# =====================
-vehicle.parameters["SIM_WIND_SPD"] = 3
-vehicle.parameters["SIM_WIND_DIR"] = 30
-vehicle.parameters["SIM_WIND_TURB"] = 2
-vehicle.parameters["SIM_WIND_TURB_FREQ"] = 0.2
+# ВІТЕРSIM_WIND
+# # =====================
+
+# time.sleep(3)
+# vehicle.parameters["SIM_WIND_SPD"] = 46
+# # vehicle.parameters["SIM_WIND_DIR"] = 30
+# vehicle.parameters["SIM_WIND_DIR"] = 90
+# # vehicle.parameters["SIM_WIND_TURB"] = 2
+# vehicle.parameters["SIM_WIND_TURB"] = 6
+# vehicle.parameters["SIM_WIND_TURB_FREQ"] = 0.2
 
 # =====================
 # ТОЧКИ
@@ -473,6 +477,8 @@ vehicle.parameters["SIM_WIND_TURB_FREQ"] = 0.2
 TARGET_LAT = 50.443326
 TARGET_LON = 30.448078
 TARGET_ALT = 300.0
+
+
 
 # =====================
 # RC / БАЗОВІ НАЛАШТУВАННЯ
@@ -748,8 +754,8 @@ while True:
 
     # ===== АНТИ-ВІТЕР / КОМПЕНСАЦІЯ ЗНОСУ =====
     # Якщо вітер або інерція зносять — підсилюємо компенсацію по швидкості.
-    cmd_n += -vn * WIND_GAIN
-    cmd_e += -ve * WIND_GAIN
+    # cmd_n += -vn * WIND_GAIN
+    # cmd_e += -ve * WIND_GAIN
 
     # ===== ДОДАТКОВЕ ДОТИСКАННЯ БІЛЯ ЦІЛІ =====
     if dist < FINAL_BRAKE_RADIUS:
